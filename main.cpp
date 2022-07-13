@@ -283,11 +283,66 @@ void Modeling_Transformations()
         }
         else if(temp=="end") break;
     }
+    fclose(stdin);
+    fclose(stdout);
 
     
+}
+void View_Transformation(){
+    ifstream stage1;
+    ofstream stage2;
+    stage1.open ("stage1.txt");
+    stage2.open ("stage2.txt");
+    stage2 << std::fixed;
+    stage2 << std::setprecision(7);
+
+    Vector3D l(lookX-eyeX, lookY-eyeY,lookZ-eyeZ);
+    l.normalize();
+    Vector3D u(upX,upY,upZ);
+    Vector3D r = l^u;
+    r.normalize();
+    u = r ^ l;
+
+    Matrix T = translation_Matrix(-eyeX,-eyeY,-eyeZ);
+    Matrix R = Matrix::identity_matrix(4);
+
+    R.values[0][0] = r.x;
+    R.values[0][1] = r.y;
+    R.values[0][2] = r.z;
+
+    R.values[1][0] = u.x;
+    R.values[1][1] = u.y;
+    R.values[1][2] = u.z;
+
+    R.values[2][0] = -l.x;
+    R.values[2][1] = -l.y;
+    R.values[2][2] = -l.z;
+
+    Matrix V = R * T;
+
+    while(1){
+        double x, y,z;
+        bool eof_found = false;
+        for(int i =0; i<3; i ++){
+            stage1>>x;
+            if(stage1.eof()) {
+                eof_found = true;
+                break;
+            }
+            stage1>>y>>z;
+            Homogenous_Point p(x,y,z);
+            p = V * p;
+            stage2<<p.x<<" "<<p.y<<" "<<p.z<<endl;
+        }
+        if(eof_found) break;
+        stage2<<endl;
+    }
+    stage1.close();
+    stage2.close();
 }
 int main()
 {
     Modeling_Transformations();
+    View_Transformation();
     
 }
