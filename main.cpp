@@ -154,7 +154,7 @@ class Matrix{
 
         Matrix mat = (*this) * m;
 
-        return Homogenous_Point(mat.values[0][0],mat.values[1][0],mat.values[2][0],mat.values[3][0]);
+        return Homogenous_Point(mat.values[0][0]/mat.values[3][0],mat.values[1][0]/mat.values[3][0],mat.values[2][0]/mat.values[3][0]);
     }
     void print(){
         for(int i = 0; i<rows;i++){
@@ -221,7 +221,7 @@ Matrix rotate_Matrix(double angle, double ax, double ay, double az)
 double eyeX, eyeY, eyeZ;
 double lookX, lookY, lookZ;
 double upX, upY, upZ;
-double fovY, aspectRatio, near, far;
+double fovX,fovY, aspectRatio, near, far;
 
 Matrix matrix = Matrix::identity_matrix(4);
 stack <Matrix> matrix_stack;
@@ -340,9 +340,57 @@ void View_Transformation(){
     stage1.close();
     stage2.close();
 }
+void Projection_Transformation()
+{
+    ifstream stage2;
+    ofstream stage3;
+    stage2.open ("stage2.txt");
+    stage3.open ("stage3.txt");
+    stage3 << std::fixed;
+    stage3 << std::setprecision(7);
+
+    fovX = fovY * aspectRatio;
+    double t = near * tan((pi/180.0) * (fovY/2.0));
+    double r = near * tan((pi/180.0) * (fovX/2.0));
+
+    Matrix p = Matrix::identity_matrix(4);
+
+    p.values[0][0] = near/r;
+    p.values[1][1] = near/t;
+    p.values[2][2] = -(far+near)/(far-near);
+    p.values[2][3] = -(2*far*near)/(far-near);
+    p.values[3][2] = -1;
+    p.values[3][3] = 0;
+
+     while(1){
+        double x, y,z;
+        bool eof_found = false;
+        for(int i =0; i<3; i ++){
+            stage2>>x;
+            if(stage2.eof()) {
+                eof_found = true;
+                break;
+            }
+            stage2>>y>>z;
+            Homogenous_Point q(x,y,z);
+            q = p * q;
+            stage3<<q.x<<" "<<q.y<<" "<<q.z<<endl;
+        }
+        if(eof_found) break;
+        stage3<<endl;
+    }
+    stage2.close();
+    stage3.close();
+
+
+
+
+
+    
+}
 int main()
 {
     Modeling_Transformations();
     View_Transformation();
-    
+    Projection_Transformation();
 }
