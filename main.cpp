@@ -2,6 +2,7 @@
 #include<cmath>
 #include<cassert>
 #include<bits/stdc++.h>
+#include "bitmap_image.hpp"
 
 #define pi (2*acos(0.0))
 
@@ -11,7 +12,7 @@ using namespace std;
 class Homogenous_Point{
     public:
     double x,y,z,w;
-
+    Homogenous_Point(){}
     Homogenous_Point(double x, double y,double z){
         this->x= x;
         this->y=y;
@@ -68,6 +69,73 @@ class Vector3D{
 		printf("x = %lf , y = %lf , z = %lf\n",x,y,z);
 	}
 
+};
+
+class Color{
+    public:
+    double r, g, b;
+    Color(){
+        r=10;
+        g=10;
+        b=10;
+    }
+    Color(double r, double g, double b){
+        this->r = r;
+        this->g = g;
+        this->b = b;
+    }
+};
+
+class Triangle{
+    public:
+    Homogenous_Point points[3];
+    Color color;
+    Triangle(Homogenous_Point pointA,Homogenous_Point pointB, Homogenous_Point pointC,Color color){
+        points[0] = pointA;
+        points[1] = pointB;
+        points[2] = pointC;
+        this->color = color;
+    }
+    Triangle(){}  
+    void decendingSortByYValue(){
+
+         for(int i=0;i<2;i++){
+            for(int j=i+1; j < 3 ;j++){
+                if(points[i].y < points[j].y){
+                    Homogenous_Point temp = points[i];
+                    points[i]=points[j];
+                    points[j]=temp;//swap
+                }
+            }
+         }
+     }
+     int uniqueIndexForY(){
+
+       if(points[1].y == points[2].y ) return 0;
+       if(points[2].y == points[0].y ) return 1;
+       if(points[0].y == points[1].y) return 2;
+       return 0;
+
+     }
+
+      double xmin(){
+        double mx = points[0].x;
+        for ( int i = 1  ; i < 3 ; i++){
+            if( mx > points[i].x ) mx = points[i].x;
+        }
+       return mx;
+     }
+
+     double xmax(){
+
+        double mx = points[0].x;
+        for ( int i = 1  ; i < 3 ; i++){
+            if( mx < points[i].x ) mx = points[i].x;
+        }
+       return mx;
+     }   
+
+    
 };
 
 class Matrix{
@@ -222,6 +290,10 @@ double eyeX, eyeY, eyeZ;
 double lookX, lookY, lookZ;
 double upX, upY, upZ;
 double fovX,fovY, aspectRatio, near, far;
+int screenHeight, screenWidth;
+double x_left, y_bottom, x_right, y_top, front, rear;
+Color background(0,0,0);
+
 
 Matrix matrix = Matrix::identity_matrix(4);
 stack <Matrix> matrix_stack;
@@ -381,16 +453,171 @@ void Projection_Transformation()
     }
     stage2.close();
     stage3.close();
+}
 
+void Clipping_ScanConversion(){
+    ifstream config, stage3;
+    ofstream out;
+    config.open("config.txt");
+    stage3.open("stage3.txt");
+    out.open("z-buffer.txt");
 
-
-
-
+    cout<<std::fixed;
+    cout<<std::setprecision(7);
     
+    config>>screenWidth>>screenHeight;
+    config>>x_left;
+    config>>y_bottom;
+    config>>front>>rear;
+
+    x_right = -x_left;
+    y_top = - y_bottom;
+
+    queue<Triangle> triangles;
+    double x,y,z,dx,dy;
+    bool eof_found = false;
+    Triangle temp;
+
+    for(int i = 0;; i++){
+       
+
+        for ( int j=0;j<3;j++){
+            stage3>>x;
+            if(stage3.eof()){
+                eof_found = true;
+                break;
+            }
+            stage3>>y>>z;
+            Homogenous_Point p(x,y,z);
+            temp.points[j] = p;
+        }
+        if(eof_found) break;
+
+            temp.color.r = rand() % 256;
+            temp.color.g = rand() % 256;
+            temp.color.b = rand() % 256;
+            triangles.push(temp);
+    }
+    
+
+    config.close();
+    stage3.close();
+
+    Color **frameBuffer = new Color *[screenHeight];
+    double **zBuffer = new double *[screenHeight];
+
+    for(int i=0; i<screenHeight; i++){
+        frameBuffer[i] = new Color [screenWidth];
+        zBuffer[i] = new double [screenWidth];
+
+        for(int j=0;j<screenWidth;j++){
+            frameBuffer[i][j] = background;
+            zBuffer[i][j] = rear;
+        } 
+    }
+
+    dx = (x_right - x_left) / screenWidth;
+    dy = (y_top - y_bottom) / screenHeight;
+    
+    while(triangles.size()!=0){
+        temp = triangles.front();
+        triangles.pop();
+
+        temp.decendingSortByYValue();
+
+        double xMax = temp.xmax();
+        double xMin = temp.xmin();
+
+        int yLine[3];
+
+        for(int i=0; i<3 ;i++){
+            double ty = y_top - temp.points[i].y;
+            yLine[i] = ty/dy;
+        }
+        int id0 = temp.uniqueIndexForY();
+        int id1 = (id0+1) % 3;
+        int id2 = (id0+2) % 3;
+
+        for(int line_y = yLine[0]+1 ; line_y<=yLine[2];line_y++){
+            if(line_y <= 0 || (line_y>=screenHeight-1)) continue;
+
+            double ys = y_top - (dy*line_y);
+
+            double xA = (ys - temp.points[id1].y) / (temp.points[id0].y - temp.points[id1].y) * (temp.points[id0].x - temp.points[id1].x) +temp.points[id1].x;
+            double zA = (ys - temp.points[id1].y) / (temp.points[id0].y - temp.points[id1].y) * (temp.points[id0].z - temp.points[id1].z) +temp.points[id1].z;
+             double xB = (ys - temp.points[id2].y) / (temp.points[id0].y - temp.points[id2].y) * (temp.points[id0].x - temp.points[id2].x) +temp.points[id2].x;
+              double zB = (ys - temp.points[id2].y) / (temp.points[id0].y - temp.points[id2].y) * (temp.points[id0].z - temp.points[id2].z) +temp.points[id2].z;
+
+              double x_l, x_r, z_l, z_r ; //l=left, r=right
+              if(xA < xB){
+                x_l = xA;
+                z_l = zA;
+                x_r = xB;
+                z_r = zB;
+              }
+              else{
+                x_l = xB;
+                z_l = zB;
+                x_r = xA;
+                z_r = zA;
+              }
+              if(x_l < xMin) {
+                x_l = xMin + abs(xMin -  x_l);
+              }
+              if(x_r > xMax){
+                x_r = xMax - abs(xMax - x_r);
+              }
+
+              int xLLine = (- x_left + x_l)/dx;
+              int xRLine = (-x_left+x_r)/dx;
+              
+              for(int xLine = xLLine+1; xLine<xRLine; xLine++){
+                if(xLine < 0 || xLine>=(screenWidth-1)) continue;
+
+                double xs = xLine * dx + x_left ;
+                double zs = ((xs-x_r)/(x_l-x_r)) * (z_l - z_r) + z_r;
+
+                if(zs < rear && zBuffer[xLine][line_y]>zs){
+                    zBuffer[xLine][line_y] = zs;
+                    frameBuffer[xLine][line_y] = temp.color;
+                    out<<zs<<" ";
+                }
+                    
+                
+              }
+
+        }
+    }
+
+    //Creating bmp images
+    bitmap_image image(screenWidth,screenHeight);
+
+    for(int i=0;i<screenHeight;i++){
+        for(int j=0;j<screenWidth;j++){
+            image.set_pixel(i,j,frameBuffer[i][j].r,frameBuffer[i][j].g,frameBuffer[i][j].b);
+
+        }
+    }
+    image.save_image("out.bmp");
+    out<<endl;
+    out.close();
+
+    //Freeing the memory
+
+    for(int i = 0; i<screenHeight;i++){
+        delete frameBuffer[i];
+        delete zBuffer[i];
+    }
+    delete frameBuffer;
+    delete zBuffer;
 }
 int main()
 {
     Modeling_Transformations();
     View_Transformation();
     Projection_Transformation();
+
+    Clipping_ScanConversion();
+
+    return 0;
 }
