@@ -8,7 +8,6 @@
 
 using namespace std;
 
-
 class Homogenous_Point{
     public:
     double x,y,z,w;
